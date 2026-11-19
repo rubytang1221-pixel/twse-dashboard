@@ -31,6 +31,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "Auto Update Bot"
-          git add data.json
+          git add twse-dashboard/data.json
           git commit -m "自動更新每日籌碼數據" || exit 0
+          git pull --rebase origin main
           git push
