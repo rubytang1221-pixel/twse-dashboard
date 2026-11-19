@@ -22,10 +22,10 @@ jobs:
           python-version: '3.10'
 
       - name: 安裝需要的小工具
-        run: pip install -r requirements.txt
+        run: pip install -r twse-dashboard/requirements.txt
 
       - name: 執行爬蟲更新 data.json
-        run: python update.py
+        run: python twse-dashboard/update.py
 
       - name: 自動存檔回 GitHub
         run: |
