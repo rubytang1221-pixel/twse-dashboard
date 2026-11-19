@@ -1,23 +1,11 @@
-[
-  {
-    "date": "2026-11-18",
-    "taiex_futures": 22800,
-    "volume": 4200,
-    "margin": 3150,
-    "usd_twd": 32.15,
-    "foreign_spot": -120.5,
-    "trust_spot": 45.2,
-    "dealer_spot": -15.3,
-    "foreign_futures": -35000,
-    "top5": -8500,
-    "top10": -11000,
-    "pc_ratio": 98.5,
-    "foreign_options": -1500,
-    "mtx_retail": 12.5,
-    "tmf_retail": 8.4,
-    "tsm_adr": 192.5,
-    "tsm_adr_change": 1.2,
-    "red_count": 5,
-    "green_count": 8
-  }
-]
+{
+  "version": 2,
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "data.json", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
