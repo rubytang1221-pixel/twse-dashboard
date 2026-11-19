@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+
+  <meta charset="UTF-8">  <title>台股每日盤後籌碼戰情室</title>
+  <style>
+    body { background-color: #0b0f19; color: #e2e8f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; margin: 0; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 15px; margin-bottom: 20px; }
+    .title { font-size: 24px; font-weight: bold; color: #fff; }
+    .legend { display: flex; gap: 20px; font-size: 14px; margin-bottom: 20px; background: #111827; padding: 12px 20px; border-radius: 8px; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+    .red { background-color: #ef4444; box-shadow: 0 0 8px #ef4444; }
+    .green { background-color: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .gray { background-color: #64748b; }
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 30px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 15px; position: relative; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
+    .card-title { font-size: 15px; font-weight: bold; color: #f8fafc; margin-bottom: 10px; }
+    .card-value { font-size: 22px; font-weight: bold; color: #38bdf8; }
+    .stats-box { background: #1e293b; border-left: 4px solid #3b82f6; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+    table { width: 100%; border-collapse: collapse; background: #111827; border-radius: 8px; overflow: hidden; font-size: 13px; }
+    th, td { padding: 12px; text-align: center; border-bottom: 1px solid #1f2937; }
+    th { background: #1e293b; color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div style="font-size: 12px; color: #ef4444;">● TWSE / TAIFEX DAILY CHIP ANALYTICS</div>
+      <div class="title">台股每日盤後籌碼戰情室</div>
+    </div>
+    <div>更新時間：<span id="update-time">載入中...</span></div>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot red"></span>紅燈（偏多訊號）</span>
+    <span><span class="dot green"></span>綠燈（偏空訊號）</span>
+    <span><span class="dot gray"></span>灰燈（中性參考）</span>
+    <span style="margin-left: auto; color: #fbbf24;" id="today-summary">今日統計：計算中...</span>
+  </div>
+
+  <div class="grid" id="cards-container"></div>
+
+  <div class="stats-box">
+    <h3 style="margin-top: 0; color: #60a5fa;">📊 統計學與機率分析：連續紅綠燈漲跌勝率預測</h3>
+    <div id="probability-analysis">資料累積中，至少需要 2 天以上的歷史數據即可開始計算連續燈號與隔日漲跌機率...</div>
+  </div>
+
+  <h3>每日籌碼統計歷史總表</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>日期</th><th>台指結算</th><th>現貨量(億)</th><th>融資餘額</th><th>美元台幣</th>
+        <th>外資現貨</th><th>投信現貨</th><th>自營商</th><th>外資期未平倉</th>
+        <th>五大淨額</th><th>十大淨額</th><th>P/C比</th><th>外資選(萬)</th>
+        <th>小台散戶</th><th>微台散戶</th><th>台積ADR</th><th>趨勢判定</th>
+      </tr>
+    </thead>
+    <tbody id="history-table"></tbody>
+  </table>
+
+  <script>
+    async function loadDashboard() {
+      try {
+        const response = await fetch('./data.json?t=' + new Date().getTime());
+        const data = await response.json();
+        if (!data || data.length === 0) return;
+
+        const today = data[data.length - 1];
+        const prev = data.length > 1 ? data[data.length - 2] : today;
+        document.getElementById('update-time').innerText = today.date;
+
+        // 定義 15 項指標與你的紅綠燈規則
+        const indicators = [
+          { tag: '01-期貨指數', name: '台指結算', val: today.taiex_futures, light: today.taiex_futures > prev.taiex_futures ? 'red' : (today.taiex_futures < prev.taiex_futures ? 'green' : 'gray') },
+          { tag: '02-大盤量能', name: '現貨量(億)', val: today.volume, light: today.volume > 8000 ? 'red' : (today.volume < 8000 ? 'green' : 'gray') },
+          { tag: '03-散戶信用', name: '融資餘額(億)', val: today.margin, light: today.margin < prev.margin ? 'red' : (today.margin > prev.margin ? 'green' : 'gray') },
+          { tag: '04-匯率動向', name: '美元兌台幣', val: today.usd_twd, light: 'gray' },
+          { tag: '05-三大法人', name: '外資現貨(億)', val: today.foreign_spot, light: today.foreign_spot > 0 ? 'red' : (today.foreign_spot < 0 ? 'green' : 'gray') },
+          { tag: '06-三大法人', name: '投信現貨(億)', val: today.trust_spot, light: today.trust_spot > 0 ? 'red' : (today.trust_spot < 0 ? 'green' : 'gray') },
+          { tag: '07-三大法人', name: '自營商現貨(億)', val: today.dealer_spot, light: today.dealer_spot > 0 ? 'red' : (today.dealer_spot < 0 ? 'green' : 'gray') },
+          { tag: '08-期貨籌碼', name: '外資台指期未平倉', val: today.foreign_futures, light: today.foreign_futures > prev.foreign_futures ? 'red' : (today.foreign_futures < prev.foreign_futures ? 'green' : 'gray') },
+          { tag: '09-大額交易人', name: '五大淨額(口)', val: today.top5, light: today.top5 > 0 ? 'red' : (today.top5 < 0 ? 'green' : 'gray') },
+          { tag: '10-大額交易人', name: '十大淨額(口)', val: today.top10, light: today.top10 > 0 ? 'red' : (today.top10 < 0 ? 'green' : 'gray') },
+          { tag: '11-選擇權指標', name: 'P/C未平倉比', val: today.pc_ratio + '%', light: today.pc_ratio > 100 ? 'red' : 'green' },
+          { tag: '12-選擇權指標', name: '外資選擇權未平倉(萬)', val: today.foreign_options, light: today.foreign_options > 0 ? 'red' : 'green' },
+          { tag: '13-散戶指標', name: '小台散戶多空比(%)', val: today.mtx_retail + '%', light: today.mtx_retail < 0 ? 'red' : (today.mtx_retail > 0 ? 'green' : 'gray') },
+          { tag: '14-散戶指標', name: '微台散戶多空比(%)', val: today.tmf_retail + '%', light: today.tmf_retail < 0 ? 'red' : (today.tmf_retail > 0 ? 'green' : 'gray') },
+          { tag: '15-美股連動', name: '台積電美股ADR指數', val: today.tsm_adr, light: today.tsm_adr_change > 0 ? 'red' : (today.tsm_adr_change < 0 ? 'green' : 'gray') }
+        ];
+
+        let redCount = 0, greenCount = 0;
+        const container = document.getElementById('cards-container');
+        container.innerHTML = '';
+
+        indicators.forEach(item => {
+          if (item.light === 'red') redCount++;
+          if (item.light === 'green') greenCount++;
+          container.innerHTML += `
+            <div class="card">
+              <div class="card-header"><span>${item.tag}</span><span class="dot ${item.light}"></span></div>
+              <div class="card-title">${item.name}</div>
+              <div class="card-value">${item.val}</div>
+            </div>
+          `;
+        });
+
+        document.getElementById('today-summary').innerText = `今日燈號統計：🔴 ${redCount} 紅燈 ｜ 🟢 ${greenCount} 綠燈`;
+
+        // 渲染歷史表格與計算統計機率
+        const tbody = document.getElementById('history-table');
+        tbody.innerHTML = '';
+        let streakRed = 0, streakGreen = 0;
+        let redWin = 0, redTotal = 0, greenDrop = 0, greenTotal = 0;
+
+        data.forEach((row, idx) => {
+          // 簡易計算每日紅綠燈總數
+          let r = 0, g = 0;
+          if (row.foreign_spot > 0) r++; else g++;
+          if (row.trust_spot > 0) r++; else g++;
+          if (row.mtx_retail < 0) r++; else g++;
+          
+          const trend = r > g ? `偏多 (${r}紅${g}綠)` : `偏空 (${r}紅${g}綠)`;
+          if (r > g) { streakRed++; streakGreen = 0; } else { streakGreen++; streakRed = 0; }
+
+          // 統計隔日漲跌機率 (條件機率 P(隔日漲 | 連續偏多))
+          if (idx < data.length - 1) {
+            const nextDayUp = data[idx + 1].taiex_futures > row.taiex_futures;
+            if (r > g) { redTotal++; if (nextDayUp) redWin++; }
+            if (g > r) { greenTotal++; if (!nextDayUp) greenDrop++; }
+          }
+
+          tbody.innerHTML = `
+            <tr>
+              <td>${row.date}</td><td>${row.taiex_futures}</td><td>${row.volume}</td><td>${row.margin}</td>
+              <td>${row.usd_twd}</td><td>${row.foreign_spot}</td><td>${row.trust_spot}</td><td>${row.dealer_spot}</td>
+              <td>${row.foreign_futures}</td><td>${row.top5}</td><td>${row.top10}</td><td>${row.pc_ratio}</td>
+              <td>${row.foreign_options}</td><td>${row.mtx_retail}%</td><td>${row.tmf_retail}%</td><td>${row.tsm_adr}</td>
+              <td style="color: ${r > g ? '#ef4444' : '#22c55e'}; font-weight: bold;">${trend}</td>
+            </tr>
+          ` + tbody.innerHTML;
+        });
+
+        const redProb = redTotal > 0 ? ((redWin / redTotal) * 100).toFixed(1) : '樣本累積中';
+        const greenProb = greenTotal > 0 ? ((greenDrop / greenTotal) * 100).toFixed(1) : '樣本累積中';
+
+        document.getElementById('probability-analysis').innerHTML = `
+          <p>📌 <strong>目前連續狀態：</strong>已連續 <strong>${streakRed}</strong> 天紅燈偏多 / 連續 <strong>${streakGreen}</strong> 天綠燈偏空。</p>
+          <p>📈 <strong>多方勝率統計 (條件機率)：</strong>歷史上當「紅燈大於綠燈」時，隔日台指期上漲的機率為 <strong>${redProb}%</strong>（樣本數：${redTotal} 天）。</p>
+          <p>📉 <strong>空方勝率統計 (條件機率)：</strong>歷史上當「綠燈大於紅燈」時，隔日台指期下跌的機率為 <strong>${greenProb}%</strong>（樣本數：${greenTotal} 天）。</p>
+          <p style="font-size: 12px; color: #94a3b8;">💡 統計學小教室：隨著每天機器人自動記錄，當樣本數超過 30 天（中央極限定理門檻）後，系統會自動找出「連續 N 天紅燈後反轉」的黃金轉折點！</p>
+        `;
+      } catch (err) {
+        alert('讀取 data.json 失敗，請檢查檔案內容格式是否正確！');
+      }
+    }
+    loadDashboard();
+  </script>
+</body>
+</html>
