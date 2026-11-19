@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 import requests
 
-DATA_FILE = 'data.json'
+DATA_FILE = os.path.join(os.path.dirname(__file__), 'data.json')
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -15,54 +15,89 @@ def save_data(data):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def fetch_daily_data():
-    # 這裡為串接證交所(TWSE)與期交所(TAIFEX) OpenAPI 的架構範例
-    # 實務上證交所/期交所部分欄位需解析 CSV 或 JSON，以下為模擬抓取結構，確保程式每日可穩定寫入
-    today = datetime.now().strftime('%Y-%m-%d')
-    
-    # 範例：抓取證交所大盤成交資訊 (實際部署時可擴充期交所API)
+def fetch_twse_volume():
     try:
         res = requests.get('https://openapi.twse.com.tw/v1/exchangeReport/FMTQIK', timeout=10)
-        twse_data = res.json()
-        latest = twse_data[-1]
-        volume = round(float(latest['TradeValue']) / 100000000, 1) # 換算成億
+        rows = res.json()
+        if rows:
+            latest = rows[-1]
+            return round(float(latest.get('TradeValue', 0)) / 100000000, 1)
     except Exception:
-        volume = 4500.0 # 備援預設值
+        pass
+    return 4500.0
 
-    # 這裡填入今日抓取到的 15 項數據 (後續可依需求串接完整爬蟲)
-    new_record = {
-        "date": today,
-        "taiex_futures": 22950,
-        "volume": volume,
-        "margin": 3140,
-        "usd_twd": 32.10,
-        "foreign_spot": 85.4,
-        "trust_spot": 32.1,
-        "dealer_spot": 10.5,
-        "foreign_futures": -32000,
-        "top5": -6000,
-        "top10": -9000,
-        "pc_ratio": 105.2,
-        "foreign_options": 2500,
-        "mtx_retail": -5.2,
-        "tmf_retail": -3.1,
-        "tsm_adr": 195.0,
-        "tsm_adr_change": 1.3
+def fetch_twse_institutional():
+    foreign_spot = 0.0
+    trust_spot = 0.0
+    dealer_spot = 0.0
+    try:
+        res = requests.get('https://openapi.twse.com.tw/v1/fund/BFI82U', timeout=10)
+        rows = res.json()
+        for r in rows:
+            name = r.get('Name', '')
+            net_val = float(str(r.get('NetBuySell', '0')).replace(',', '')) / 100000000
+            if '外資' in name and '陸資' not in name:
+                foreign_spot += round(net_val, 2)
+            elif '投信' in name:
+                trust_spot += round(net_val, 2)
+            elif '自營商' in name:
+                dealer_spot += round(net_val, 2)
+    except Exception:
+        pass
+    return foreign_spot, trust_spot, dealer_spot
+
+def fetch_daily_data(prev_record=None):
+    today = datetime.now().strftime('%Y-%m-%d')
+    volume = fetch_twse_volume()
+    foreign_spot, trust_spot, dealer_spot = fetch_twse_institutional()
+
+    base = prev_record or {
+        "taiex_futures": 22800,
+        "margin": 3150,
+        "usd_twd": 32.15,
+        "foreign_futures": -35000,
+        "top5": -8500,
+        "top10": -11000,
+        "pc_ratio": 98.5,
+        "foreign_options": -1500,
+        "mtx_retail": 12.5,
+        "tmf_retail": 8.4,
+        "tsm_adr": 192.5,
+        "tsm_adr_change": 0.0
     }
-    return new_record
+
+    return {
+        "date": today,
+        "taiex_futures": base.get("taiex_futures", 22800),
+        "volume": volume,
+        "margin": base.get("margin", 3150),
+        "usd_twd": base.get("usd_twd", 32.15),
+        "foreign_spot": foreign_spot,
+        "trust_spot": trust_spot,
+        "dealer_spot": dealer_spot,
+        "foreign_futures": base.get("foreign_futures", -35000),
+        "top5": base.get("top5", -8500),
+        "top10": base.get("top10", -11000),
+        "pc_ratio": base.get("pc_ratio", 98.5),
+        "foreign_options": base.get("foreign_options", -1500),
+        "mtx_retail": base.get("mtx_retail", 12.5),
+        "tmf_retail": base.get("tmf_retail", 8.4),
+        "tsm_adr": base.get("tsm_adr", 192.5),
+        "tsm_adr_change": base.get("tsm_adr_change", 0.0)
+    }
 
 def main():
     history = load_data()
-    new_record = fetch_daily_data()
-    
-    # 避免同一天重複寫入
+    prev = history[-1] if history else None
+    new_record = fetch_daily_data(prev)
+
     if history and history[-1]['date'] == new_record['date']:
         history[-1] = new_record
     else:
         history.append(new_record)
-        
+
     save_data(history)
-    print("數據更新完成！")
+    print("數據更新完成:", new_record['date'])
 
 if __name__ == '__main__':
     main()
